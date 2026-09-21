@@ -26,8 +26,16 @@ whether the page saw it.
 
 ## Use
 
-Open the page and leave it full screen. `grid` cycles the density (3×5, 5×8, 7×12);
-`clear` resets the log.
+Open the page and leave it full screen. `grid` cycles the density (3×5, 5×8, 7×12),
+`clear` resets the log, and `hide` collapses every panel so that each cell — corners
+included — can be tapped; the small dot in the corner brings them back.
+
+Cell labels do not change with orientation: `R8C1` is the same cell whichever way the
+device is held, so a test case can name it. Cells simply become wide and short in
+landscape.
+
+The readout and the log never intercept a tap, so a cell underneath them still
+registers.
 
 No build step, no dependencies, no network calls — `index.html` is the whole thing,
 so it works equally from a web server, from a local file, or from anywhere you can
