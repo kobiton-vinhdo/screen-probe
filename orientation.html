@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Orientation Probe</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --ink: #f2f4f8;
+    --dim: #9aa4b2;
+    --edge: #333b47;
+    --panel: #1c2128;
+    --accent: #58a6ff;
+    --ok: #2ea043;
+    --warn: #f0b429;
+    --bad: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--ink);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    -webkit-text-size-adjust: 100%;
+  }
+  main {
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    display: flex; flex-direction: column; gap: 10px; max-width: 720px; margin: 0 auto;
+  }
+  h1 { font-size: 15px; margin: 0; color: var(--dim); font-weight: 600; }
+  #allow {
+    font: inherit; font-size: 20px; font-weight: 700; padding: 18px 12px;
+    border-radius: 10px; border: 2px solid var(--accent); background: #0d2340;
+    color: var(--ink); width: 100%;
+  }
+  #state { font-size: 13px; color: var(--dim); }
+  #state.bad { color: var(--bad); }
+
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; }
+  .label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+
+  #posture { font-size: clamp(24px, 8vw, 40px); font-weight: 800; line-height: 1.15; margin: 4px 0; }
+  #posture.flat { color: var(--warn); }
+  #posture.upright { color: var(--ok); }
+  #posture.side { color: var(--accent); }
+  #posture.down { color: var(--bad); }
+  #hint { font-size: 14px; line-height: 1.4; }
+
+  .row { display: flex; gap: 10px; align-items: stretch; }
+  .row > .card { flex: 1; }
+  #dial {
+    width: 120px; min-width: 120px; height: 120px; border-radius: 50%;
+    border: 2px solid var(--edge); position: relative; background: var(--panel);
+  }
+  #arrow {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+    transform-origin: 0 0; transition: transform .15s linear;
+  }
+  #arrow::before {
+    content: ""; position: absolute; left: -4px; top: -48px; width: 8px; height: 48px;
+    background: var(--ok); border-radius: 4px;
+  }
+  #arrow::after {
+    content: ""; position: absolute; left: -12px; top: -60px;
+    border-left: 12px solid transparent; border-right: 12px solid transparent;
+    border-bottom: 18px solid var(--ok);
+  }
+  #arrow.flat::before { background: var(--warn); }
+  #arrow.flat::after { border-bottom-color: var(--warn); }
+  .dialBox { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #dialCap { font-size: 11px; color: var(--dim); text-align: center; }
+
+  .big { font-size: 26px; font-weight: 800; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td { padding: 2px 0; vertical-align: top; }
+  td:first-child { color: var(--dim); padding-right: 10px; white-space: nowrap; }
+  #log { font-size: 12px; line-height: 1.5; max-height: 9em; overflow: auto; }
+  #log div:first-child { color: var(--ink); }
+  #log div { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Orientation Probe: how the device is physically held</h1>
+
+  <button id="allow" type="button">Tap to start the motion sensor</button>
+  <div id="state">Sensor not started.</div>
+
+  <div class="card">
+    <div class="label">Physical position</div>
+    <div id="posture">—</div>
+    <div id="hint">Start the sensor to read how the device is held.</div>
+  </div>
+
+  <div class="row">
+    <div class="dialBox">
+      <div id="dial" aria-label="Arrow points to physical up"><div id="arrow"></div></div>
+      <div id="dialCap">arrow = physical up</div>
+    </div>
+    <div class="card">
+      <div class="label">Tilt from lying flat</div>
+      <div class="big" id="tilt">—</div>
+      <div style="font-size:11px;color:var(--dim)">0° flat · 90° standing</div>
+      <div class="label" style="margin-top:6px">Screen (interface)</div>
+      <div id="iface" style="font-size:15px;font-weight:700">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <tr><td>Up vector (x, y, z)</td><td id="up">—</td></tr>
+      <tr><td>beta / gamma / alpha</td><td id="euler">—</td></tr>
+      <tr><td>Gravity (raw, m/s²)</td><td id="grav">—</td></tr>
+      <tr><td>Viewport (CSS px)</td><td id="vp">—</td></tr>
+      <tr><td>Interface angle</td><td id="ang">—</td></tr>
+      <tr><td>Sensor updates</td><td id="upd">0</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="label">Changes (newest first)</div>
+    <div id="log"><div>No readings yet.</div></div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var DEG = Math.PI / 180;
+  var updates = 0, lastAt = 0, lastPosture = null, gravity = null;
+  var history = [];
+
+  function fmt(n, d) { return (n >= 0 ? "+" : "") + n.toFixed(d === undefined ? 2 : d); }
+  function clock() { var t = new Date(); return t.toTimeString().slice(0, 8); }
+
+  // Interface rotation in degrees (how far the content is turned from the device's natural
+  // portrait). iOS reports it as window.orientation: 0, 90 (turned counter-clockwise),
+  // -90 (clockwise) or 180.
+  function interfaceAngle() {
+    if (typeof window.orientation === "number") return window.orientation;
+    if (screen.orientation && typeof screen.orientation.angle === "number") {
+      var a = screen.orientation.angle;
+      return a === 270 ? -90 : a;
+    }
+    return 0;
+  }
+
+  function renderInterface() {
+    var w = window.innerWidth, h = window.innerHeight;
+    $("vp").textContent = w + " x " + h;
+    $("iface").textContent = (w > h ? "LANDSCAPE" : "PORTRAIT") + " (" + w + " x " + h + ")";
+    var src = typeof window.orientation === "number" ? "window.orientation" :
+      (screen.orientation ? "screen.orientation " + screen.orientation.type : "n/a");
+    $("ang").textContent = interfaceAngle() + "° (" + src + ")";
+  }
+
+  // Which way is physically up, in the device's own axes: x to the right edge, y to the top
+  // edge, z out of the screen. Derived from the W3C Z-X'-Y'' angles, so it does not depend
+  // on the sign convention of the raw accelerometer.
+  function upVector(beta, gamma) {
+    var b = beta * DEG, g = gamma * DEG;
+    return { x: -Math.sin(g) * Math.cos(b), y: Math.sin(b), z: Math.cos(g) * Math.cos(b) };
+  }
+
+  function classify(u) {
+    if (Math.abs(u.z) > 0.8) {
+      return u.z > 0
+        ? { key: "flat", text: "FLAT, screen up",
+            hint: "The device is lying flat. iOS cannot tell portrait from landscape here, so an app keeps the last orientation it had. Standing the device upright should let apps turn to portrait." }
+        : { key: "flat", text: "FLAT, screen down",
+            hint: "The device is lying flat, screen facing down. iOS keeps the last orientation it had." };
+    }
+    if (Math.abs(u.y) >= Math.abs(u.x)) {
+      return u.y > 0
+        ? { key: "upright", text: "UPRIGHT, top edge up",
+            hint: "The device stands in portrait. Apps that support portrait should show in portrait." }
+        : { key: "down", text: "UPSIDE DOWN, top edge down",
+            hint: "The device stands upside down. iPhone apps usually do not rotate to upside-down portrait." };
+    }
+    return u.x > 0
+      ? { key: "side", text: "ON ITS SIDE, right edge up",
+          hint: "The device stands in landscape. Apps that support landscape will show in landscape." }
+      : { key: "side", text: "ON ITS SIDE, left edge up",
+          hint: "The device stands in landscape. Apps that support landscape will show in landscape." };
+  }
+
+  function addHistory(text) {
+    history.unshift(clock() + "  " + text);
+    history = history.slice(0, 20);
+    $("log").innerHTML = history.map(function (h) {
+      var d = document.createElement("div"); d.textContent = h; return d.outerHTML;
+    }).join("");
+  }
+
+  function onOrientation(e) {
+    if (e.beta === null || e.gamma === null) return;
+    updates++; lastAt = Date.now();
+    var u = upVector(e.beta, e.gamma);
+    var p = classify(u);
+    var tilt = Math.acos(Math.max(-1, Math.min(1, Math.abs(u.z)))) / DEG;
+
+    $("posture").textContent = p.text;
+    $("posture").className = p.key;
+    $("hint").textContent = p.hint;
+    $("tilt").textContent = tilt.toFixed(0) + "°";
+    $("up").textContent = fmt(u.x) + ", " + fmt(u.y) + ", " + fmt(u.z);
+    $("euler").textContent = fmt(e.beta, 0) + "° / " + fmt(e.gamma, 0) + "° / " +
+      (e.alpha === null ? "n/a" : e.alpha.toFixed(0) + "°");
+
+    // Arrow: physical up projected on the screen, turned into page coordinates.
+    var phi = Math.atan2(u.x, u.y) / DEG;            // clockwise from the device's top edge
+    var rot = phi - interfaceAngle();
+    $("arrow").style.transform = "rotate(" + rot.toFixed(0) + "deg)";
+    $("arrow").className = p.key === "flat" ? "flat" : "";
+
+    if (p.text !== lastPosture) {
+      addHistory(p.text + " (tilt " + tilt.toFixed(0) + "°, screen " +
+        (window.innerWidth > window.innerHeight ? "landscape" : "portrait") + ")");
+      lastPosture = p.text;
+    }
+  }
+
+  function onMotion(e) {
+    var g = e.accelerationIncludingGravity;
+    if (!g || g.x === null) return;
+    gravity = g;
+    $("grav").textContent = fmt(g.x, 1) + ", " + fmt(g.y, 1) + ", " + fmt(g.z, 1);
+  }
+
+  function listen() {
+    window.addEventListener("deviceorientation", onOrientation);
+    window.addEventListener("devicemotion", onMotion);
+    $("allow").style.display = "none";
+    $("state").className = "";
+    $("state").textContent = "Sensor started. Waiting for readings…";
+  }
+
+  function start() {
+    var needs = window.DeviceOrientationEvent &&
+      typeof DeviceOrientationEvent.requestPermission === "function";
+    if (!window.DeviceOrientationEvent) {
+      $("state").className = "bad";
+      $("state").textContent = "This browser has no orientation sensor API.";
+      return;
+    }
+    if (!needs) { listen(); return; }
+    // iOS 13+: permission must be asked from a tap, for both events.
+    DeviceOrientationEvent.requestPermission().then(function (r) {
+      if (r !== "granted") throw new Error(r);
+      if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function") {
+        return DeviceMotionEvent.requestPermission().catch(function () { return "denied"; });
+      }
+    }).then(listen).catch(function (err) {
+      $("state").className = "bad";
+      $("state").textContent = "Motion access was not granted (" + (err && err.message || err) +
+        "). Close the tab, open the page again and choose Allow.";
+    });
+  }
+
+  $("allow").addEventListener("click", start);
+  window.addEventListener("resize", renderInterface);
+  window.addEventListener("orientationchange", function () {
+    renderInterface();
+    addHistory("Screen turned to " + (window.innerWidth > window.innerHeight ? "landscape" : "portrait") +
+      " (" + window.innerWidth + " x " + window.innerHeight + ")");
+  });
+  renderInterface();
+
+  setInterval(function () {
+    renderInterface();
+    if (!updates) return;
+    var age = ((Date.now() - lastAt) / 1000).toFixed(1);
+    $("upd").textContent = updates + " (last " + age + " s ago)";
+    if (Date.now() - lastAt > 3000) {
+      $("state").className = "bad";
+      $("state").textContent = "No sensor reading for " + age + " s.";
+    } else if ($("state").className === "bad" || /Waiting/.test($("state").textContent)) {
+      $("state").className = "";
+      $("state").textContent = "Sensor live.";
+    }
+  }, 500);
+})();
+</script>
+</body>
+</html>

@@ -40,3 +40,18 @@ registers.
 No build step, no dependencies, no network calls — `index.html` is the whole thing,
 so it works equally from a web server, from a local file, or from anywhere you can
 put one file.
+
+## Orientation probe
+
+`orientation.html` shows how the device is physically held, read from its motion
+sensor: lying flat (screen up or down), standing upright, upside down, or on its side,
+with the tilt from flat, an arrow pointing to physical up, and the screen's own
+(interface) orientation next to it. A change log records each posture change with the
+time, so someone can move the device and the change shows up remotely.
+
+iOS asks for motion access: tap the start button, then **Allow**. If access was
+refused, close the tab and open the page again.
+
+Why it matters: a phone lying flat gives iOS no portrait-or-landscape signal, so an app
+keeps whatever orientation it last had. If the page says FLAT, standing the device
+upright is the first thing to try.
